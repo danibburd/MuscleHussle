@@ -1,9 +1,7 @@
 import utime
-from machine import Pin
-from machine import ADC
-from machine import DAC
-from machine import PWM
+from machine import Pin, PWM, ADC, DAC
 from read_temp import init_temp_sensor, read_temp
+from pid import PID
 
 #initialize PID
 pid = PID(1.0, 0.1, 0.05, setpoint=17)
@@ -13,7 +11,7 @@ pid.output_limits = (0, 150)
 #initialize Input/Output devices
 temp_sens = init_temp_sensor()
 
-##### Initialize PWM output for motor 1
+# Initialize PWM output for motor 1
 step_pin1 = PWM(Pin(16, Pin.OUT))
 dir_pin1 = Pin(17, Pin.OUT)
 # Initialize PWM output for motor 2
@@ -34,6 +32,15 @@ step_pin2.freq(666)
 # Set motor speed
 step_pin1.duty(10)
 step_pin2.duty(10)
+
+#Pin to which the LED sensor would be connected
+adc = ADC(Pin(33))
+adc.atten(ADC.ATTN_11DB)
+
+#Pin to which the LED ligh is connected
+pwm = PWM(Pin(15))
+pwm.freq(70000)
+pwm.duty(8)
 
 
 sample_last_ms = 0
@@ -68,6 +75,27 @@ def get_change(error):
             change_voltage(False)
         print('no change')
 
+#OD sensor control
+#TODO: move to a seperate document
+currentSamples = []
+recentAvg = 0
+
+def AvgSamples(samples):
+    return (sum(samples) / len(samples))
+
+def inputSample(sample):
+    currentSamples.append(sample)
+
+    if (len(currentSamples) < 10):
+        return None
+    elif ( len(currentSamples) == 10 ):
+        avg = AvgSamples(currentSamples)
+        currentSamples = []    
+        return avg
+    else:
+        print("oop")
+        currentSamples = []   
+        return None
 
 while (True):
     if utime.ticks_diff(utime.ticks_ms(), sample_last_ms) >= SAMPLE_INTERVAL:
@@ -75,6 +103,13 @@ while (True):
 
         control = pid(temp)
         get_change(control)
+        adcRead = adc.read()
+        newAvg = inputSample(adcRead)
+        if (newAvg):
+            recentAvg = newAvg
+        print("most recent average: " + str(recentAvg))
+
+
         # update_pump(temp)
 
         print('Thermistor temperature: ' + str(temp) + ' & pid result: ' + str(control))
