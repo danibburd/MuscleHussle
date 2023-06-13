@@ -12,45 +12,46 @@ pid.output_limits = (0, 10)
 temp_sens = init_temp_sensor()
 
 # Initialize PWM output for motor 1
-step_pin1 = PWM(Pin(16, Pin.OUT))
-dir_pin1 = Pin(17, Pin.OUT)
+step_pin1 = PWM(Pin(5, Pin.OUT))
+#dir_pin1 = Pin(17, Pin.OUT)
 # Initialize PWM output for motor 2
-step_pin2 = PWM(Pin(18, Pin.OUT))
-dir_pin2 = Pin(19, Pin.OUT)
+#step_pin2 = PWM(Pin(18, Pin.OUT))
+#dir_pin2 = Pin(19, Pin.OUT)
 
 #sets the cooling
 cooling_volts = Pin(4, Pin.OUT)
 cooling_volts.value(0)
 
 # Set motor direction clockwise
-dir_pin1.value(1)
-dir_pin2.value(0)
+#dir_pin1.value(1)
+#dir_pin2.value(0)
 
 # Set PWM frequency
 step_pin1.freq(500)
-step_pin2.freq(666)
+#step_pin2.freq(666)
 # Set motor speed
 step_pin1.duty(10)
-step_pin2.duty(10)
+#step_pin2.duty(10)
 
 #Pin to which the LED sensor would be connected
-adc = ADC(Pin(33))
+adc = ADC(Pin(36))
 adc.atten(ADC.ATTN_11DB)
+#adc.width(ADC.WIDTH_12BIT)
 
 #Pin to which the LED ligh is connected
 pwm = PWM(Pin(15))
-pwm.freq(70000)
+pwm.freq(2000)
 pwm.duty(8)
 
 
 sample_last_ms = 0
-SAMPLE_INTERVAL = 10000
+SAMPLE_INTERVAL = 1000
 pid.sample_time = SAMPLE_INTERVAL/1000
 
 #pump control for PID
 #TODO: move this to seperate document
 def change_flowrate(new_flow):
-    step_pin2.freq(int(new_flow))
+    step_pin1.freq(int(new_flow))
 
 def change_voltage(On5):
     if (On5):
@@ -62,7 +63,7 @@ def get_change(error):
     if(error >= 2 ):
         if(cooling_volts.value() == 0):
             change_voltage(True)
-        error = (error - 2) * 42
+        error = (error - 2) * 53
         freq = error + 250
         if (freq > 666):
             freq = 666
@@ -71,7 +72,7 @@ def get_change(error):
             change_voltage(False)
         print('freq: ' + str(freq) )
     else:
-        if(step_pin2.freq != 0):
+        if(step_pin1.freq != 0):
             change_flowrate(250)
         if(cooling_volts.value() == 0):
             change_voltage(True)
@@ -79,40 +80,45 @@ def get_change(error):
 
 #OD sensor control
 #TODO: move to a seperate document
-currentSamples = []
-recentAvg = 0
+## currentSamples = []
+# recentAvg = 0
+# 
+# def AvgSamples(samples):
+#     return (sum(samples) / len(samples))
+# 
+# def inputSample(sample):
+#     global currentSamples
+#     currentSamples.append(sample)
+# 
+#     if (len(currentSamples) < 10):
+#         return None
+#     elif ( len(currentSamples) == 10 ):
+#         avg = AvgSamples(currentSamples)
+#         currentSamples = []    
+#         return avg
+#     else:
+#         print("oop")
+#         currentSamples = []   
+#         return None
+with open("PIDmeasure2.txt", "w+") as pidFile:
 
-def AvgSamples(samples):
-    return (sum(samples) / len(samples))
+    while (True):
+        if utime.ticks_diff(utime.ticks_ms(), sample_last_ms) >= SAMPLE_INTERVAL:
+            temp = read_temp(temp_sens)
 
-def inputSample(sample):
-    currentSamples.append(sample)
+            control = pid(temp)
+            get_change(control)
+            #adcRead = adc.read()
+    #        newAvg = inputSample(adcRead)
+    #        if (newAvg):
+    #            recentAvg = newAvg
+            #print("most recent average: " + str(recentAvg) + " & most recent adc read:" + str(adcRead))
+            time = utime.localtime()
+            output = 'Thermistor temperature: ' + str(temp) + ' & pid result: ' + str(control) + " at time: " + str(time) + ", \n"
+            pidFile.write(str(output))
 
-    if (len(currentSamples) < 10):
-        return None
-    elif ( len(currentSamples) == 10 ):
-        avg = AvgSamples(currentSamples)
-        currentSamples = []    
-        return avg
-    else:
-        print("oop")
-        currentSamples = []   
-        return None
+            # update_pump(temp)
 
-while (True):
-    if utime.ticks_diff(utime.ticks_ms(), sample_last_ms) >= SAMPLE_INTERVAL:
-        temp = read_temp(temp_sens)
+            print('Thermistor temperature: ' + str(temp) + ' & pid result: ' + str(control))
+            sample_last_ms = utime.ticks_ms()
 
-        control = pid(temp)
-        get_change(control)
-        adcRead = adc.read()
-        newAvg = inputSample(adcRead)
-        if (newAvg):
-            recentAvg = newAvg
-        print("most recent average: " + str(recentAvg))
-
-
-        # update_pump(temp)
-
-        print('Thermistor temperature: ' + str(temp) + ' & pid result: ' + str(control))
-        sample_last_ms = utime.ticks_ms()
